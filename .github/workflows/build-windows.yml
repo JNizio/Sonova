@@ -1,0 +1,47 @@
+name: Build Sonova Windows
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+  workflow_dispatch:
+
+jobs:
+  build-windows:
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout Sonova
+        uses: actions/checkout@v4
+
+      - name: Checkout JUCE 9.0.1
+        uses: actions/checkout@v4
+        with:
+          repository: juce-framework/JUCE
+          ref: 9.0.1
+          path: JUCE
+
+      - name: Configure
+        run: cmake -S . -B build -DJUCE_DIR="${{ github.workspace }}/JUCE"
+
+      - name: Build Release
+        run: cmake --build build --config Release --parallel 2
+
+      - name: Stage binaries
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path artifact | Out-Null
+          $vst = Get-ChildItem -Path build -Recurse -Directory -Filter "Sonova.vst3" | Select-Object -First 1
+          if (-not $vst) { throw "Sonova.vst3 was not found" }
+          Copy-Item -Recurse $vst.FullName artifact/Sonova.vst3
+
+          $exe = Get-ChildItem -Path build -Recurse -File -Filter "Sonova.exe" | Select-Object -First 1
+          if ($exe) { Copy-Item $exe.FullName artifact/Sonova.exe }
+
+      - name: Upload Sonova
+        uses: actions/upload-artifact@v4
+        with:
+          name: Sonova-Windows
+          path: artifact
+          if-no-files-found: error
