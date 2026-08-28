@@ -25,6 +25,9 @@ juce_add_plugin(Sonova
     COPY_PLUGIN_AFTER_BUILD TRUE
 )
 
+# Generate JuceHeader.h because the current source files include it.
+juce_generate_juce_header(Sonova)
+
 target_sources(Sonova PRIVATE
     Source/PluginProcessor.cpp
     Source/PluginProcessor.h
