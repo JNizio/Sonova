@@ -28,37 +28,83 @@ void SonovaLookAndFeel::drawRotarySlider (juce::Graphics& g, int x, int y, int w
                                           float sliderPos, float rotaryStartAngle, float rotaryEndAngle,
                                           juce::Slider& slider)
 {
-    auto bounds = juce::Rectangle<float> ((float) x, (float) y, (float) width, (float) height).reduced (8.0f);
+    auto bounds = juce::Rectangle<float> ((float) x, (float) y, (float) width, (float) height);
+    bounds = bounds.removeFromTop (juce::jmax (40.0f, bounds.getHeight() - 24.0f)).reduced (7.0f);
+
     const float size = juce::jmin (bounds.getWidth(), bounds.getHeight());
     auto dial = juce::Rectangle<float> (size, size).withCentre (bounds.getCentre());
+    const float cx = dial.getCentreX();
+    const float cy = dial.getCentreY();
     const float radius = size * 0.5f;
-    const float lineW = juce::jmax (2.0f, size * 0.055f);
     const float angle = rotaryStartAngle + sliderPos * (rotaryEndAngle - rotaryStartAngle);
+    const float arcRadius = radius - juce::jmax (4.0f, size * 0.075f);
+    const float arcWidth = juce::jmax (2.3f, size * 0.052f);
 
-    g.setColour (juce::Colour (0xff1b222d));
-    g.fillEllipse (dial);
-    g.setColour (SonovaColours::panelEdge);
-    g.drawEllipse (dial, 1.0f);
+    // Outer recessed ring.
+    g.setColour (juce::Colour (0xff080b10));
+    g.fillEllipse (dial.expanded (1.5f));
+    g.setColour (juce::Colour (0xff303844));
+    g.drawEllipse (dial.expanded (1.0f), 1.0f);
 
+    // Value track and illuminated active arc.
     juce::Path track;
-    track.addCentredArc (dial.getCentreX(), dial.getCentreY(), radius - lineW,
-                         radius - lineW, 0.0f, rotaryStartAngle, rotaryEndAngle, true);
-    g.setColour (juce::Colour (0xff303947));
-    g.strokePath (track, juce::PathStrokeType (lineW, juce::PathStrokeType::curved,
+    track.addCentredArc (cx, cy, arcRadius, arcRadius, 0.0f,
+                         rotaryStartAngle, rotaryEndAngle, true);
+    g.setColour (juce::Colour (0xff2d3540));
+    g.strokePath (track, juce::PathStrokeType (arcWidth,
+                                               juce::PathStrokeType::curved,
                                                juce::PathStrokeType::rounded));
 
     juce::Path active;
-    active.addCentredArc (dial.getCentreX(), dial.getCentreY(), radius - lineW,
-                          radius - lineW, 0.0f, rotaryStartAngle, angle, true);
+    active.addCentredArc (cx, cy, arcRadius, arcRadius, 0.0f,
+                          rotaryStartAngle, angle, true);
+    g.setColour (SonovaColours::accent.withAlpha (0.18f));
+    g.strokePath (active, juce::PathStrokeType (arcWidth + 3.0f,
+                                                juce::PathStrokeType::curved,
+                                                juce::PathStrokeType::rounded));
     g.setColour (SonovaColours::accent);
-    g.strokePath (active, juce::PathStrokeType (lineW, juce::PathStrokeType::curved,
+    g.strokePath (active, juce::PathStrokeType (arcWidth,
+                                                juce::PathStrokeType::curved,
                                                 juce::PathStrokeType::rounded));
 
-    auto pointer = juce::Rectangle<float> (2.5f, radius * 0.47f)
-                       .withCentre ({ dial.getCentreX(), dial.getCentreY() - radius * 0.32f });
+    // Solid hardware-style knob body.
+    auto body = dial.reduced (arcWidth + size * 0.06f);
+    juce::ColourGradient bodyGradient (juce::Colour (0xff303946), body.getX(), body.getY(),
+                                       juce::Colour (0xff151b24), body.getRight(), body.getBottom(), false);
+    bodyGradient.addColour (0.48, juce::Colour (0xff222a35));
+    g.setGradientFill (bodyGradient);
+    g.fillEllipse (body);
+    g.setColour (juce::Colour (0xff46505e));
+    g.drawEllipse (body, 1.2f);
+    g.setColour (juce::Colours::black.withAlpha (0.35f));
+    g.drawEllipse (body.reduced (2.0f), 1.0f);
+
+    // Small centre cap makes the dial read as a physical control.
+    const float capSize = juce::jmax (4.0f, body.getWidth() * 0.10f);
+    g.setColour (juce::Colour (0xff111720));
+    g.fillEllipse (cx - capSize * 0.5f, cy - capSize * 0.5f, capSize, capSize);
+
+    // Proper rotating needle path. Unlike the previous rotated Rectangle,
+    // this preserves its dimensions at every angle.
+    const float needleStart = body.getWidth() * 0.12f;
+    const float needleEnd = body.getWidth() * 0.39f;
+    const float sinA = std::sin (angle);
+    const float cosA = std::cos (angle);
+    const juce::Point<float> p1 (cx + sinA * needleStart, cy - cosA * needleStart);
+    const juce::Point<float> p2 (cx + sinA * needleEnd,   cy - cosA * needleEnd);
+
+    juce::Path needle;
+    needle.startNewSubPath (p1);
+    needle.lineTo (p2);
     g.setColour (SonovaColours::text);
-    g.fillRoundedRectangle (pointer.transformedBy (
-        juce::AffineTransform::rotation (angle, dial.getCentreX(), dial.getCentreY())), 1.2f);
+    g.strokePath (needle, juce::PathStrokeType (juce::jmax (2.0f, size * 0.035f),
+                                                juce::PathStrokeType::curved,
+                                                juce::PathStrokeType::rounded));
+
+    // Current-value dot at the end of the needle.
+    const float dot = juce::jmax (3.0f, size * 0.055f);
+    g.setColour (SonovaColours::accent);
+    g.fillEllipse (p2.x - dot * 0.5f, p2.y - dot * 0.5f, dot, dot);
 
     juce::ignoreUnused (slider);
 }
@@ -97,7 +143,7 @@ SonovaAudioProcessorEditor::SonovaAudioProcessorEditor (SonovaAudioProcessor& p)
     titleLabel.setJustificationType (juce::Justification::centredLeft);
     addAndMakeVisible (titleLabel);
 
-    subtitleLabel.setText ("DUAL-OSC SYNTHESIZER  /  0.1", juce::dontSendNotification);
+    subtitleLabel.setText ("DUAL-OSC SYNTHESIZER  /  0.2", juce::dontSendNotification);
     subtitleLabel.setFont (juce::Font (juce::FontOptions (11.5f)));
     subtitleLabel.setColour (juce::Label::textColourId, SonovaColours::muted);
     subtitleLabel.setJustificationType (juce::Justification::centredRight);
@@ -158,6 +204,7 @@ void SonovaAudioProcessorEditor::setupKnob (juce::Slider& slider, const juce::St
                                 juce::MathConstants<float>::pi * 2.8f, true);
     slider.setTextBoxStyle (juce::Slider::TextBoxBelow, false, 76, 20);
     slider.setTextValueSuffix (suffix);
+    slider.setDoubleClickReturnValue (true, slider.getDoubleClickReturnValue().value_or (0.0));
     addAndMakeVisible (slider);
 }
 
