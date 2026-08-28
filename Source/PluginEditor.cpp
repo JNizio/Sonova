@@ -40,13 +40,11 @@ void SonovaLookAndFeel::drawRotarySlider (juce::Graphics& g, int x, int y, int w
     const float arcRadius = radius - juce::jmax (4.0f, size * 0.075f);
     const float arcWidth = juce::jmax (2.3f, size * 0.052f);
 
-    // Outer recessed ring.
     g.setColour (juce::Colour (0xff080b10));
     g.fillEllipse (dial.expanded (1.5f));
     g.setColour (juce::Colour (0xff303844));
     g.drawEllipse (dial.expanded (1.0f), 1.0f);
 
-    // Value track and illuminated active arc.
     juce::Path track;
     track.addCentredArc (cx, cy, arcRadius, arcRadius, 0.0f,
                          rotaryStartAngle, rotaryEndAngle, true);
@@ -67,7 +65,6 @@ void SonovaLookAndFeel::drawRotarySlider (juce::Graphics& g, int x, int y, int w
                                                 juce::PathStrokeType::curved,
                                                 juce::PathStrokeType::rounded));
 
-    // Solid hardware-style knob body.
     auto body = dial.reduced (arcWidth + size * 0.06f);
     juce::ColourGradient bodyGradient (juce::Colour (0xff303946), body.getX(), body.getY(),
                                        juce::Colour (0xff151b24), body.getRight(), body.getBottom(), false);
@@ -79,13 +76,10 @@ void SonovaLookAndFeel::drawRotarySlider (juce::Graphics& g, int x, int y, int w
     g.setColour (juce::Colours::black.withAlpha (0.35f));
     g.drawEllipse (body.reduced (2.0f), 1.0f);
 
-    // Small centre cap makes the dial read as a physical control.
     const float capSize = juce::jmax (4.0f, body.getWidth() * 0.10f);
     g.setColour (juce::Colour (0xff111720));
     g.fillEllipse (cx - capSize * 0.5f, cy - capSize * 0.5f, capSize, capSize);
 
-    // Proper rotating needle path. Unlike the previous rotated Rectangle,
-    // this preserves its dimensions at every angle.
     const float needleStart = body.getWidth() * 0.12f;
     const float needleEnd = body.getWidth() * 0.39f;
     const float sinA = std::sin (angle);
@@ -101,7 +95,6 @@ void SonovaLookAndFeel::drawRotarySlider (juce::Graphics& g, int x, int y, int w
                                                 juce::PathStrokeType::curved,
                                                 juce::PathStrokeType::rounded));
 
-    // Current-value dot at the end of the needle.
     const float dot = juce::jmax (3.0f, size * 0.055f);
     g.setColour (SonovaColours::accent);
     g.fillEllipse (p2.x - dot * 0.5f, p2.y - dot * 0.5f, dot, dot);
@@ -204,7 +197,6 @@ void SonovaAudioProcessorEditor::setupKnob (juce::Slider& slider, const juce::St
                                 juce::MathConstants<float>::pi * 2.8f, true);
     slider.setTextBoxStyle (juce::Slider::TextBoxBelow, false, 76, 20);
     slider.setTextValueSuffix (suffix);
-    slider.setDoubleClickReturnValue (true, slider.getDoubleClickReturnValue().value_or (0.0));
     addAndMakeVisible (slider);
 }
 
