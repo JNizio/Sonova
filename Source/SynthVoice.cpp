@@ -1,9 +1,7 @@
 #include "SynthVoice.h"
 
 SynthVoice::SynthVoice (juce::AudioProcessorValueTreeState& state)
-    : apvts (state),
-      osc1 ([] (float x) { return std::sin (x); }),
-      osc2 ([] (float x) { return std::sin (x); })
+    : apvts (state)
 {
 }
 
@@ -21,8 +19,8 @@ void SynthVoice::prepare (double sampleRate, int samplesPerBlock, int)
     spec.maximumBlockSize = static_cast<juce::uint32> (samplesPerBlock);
     spec.numChannels = 1;
 
-    osc1.prepare (spec);
-    osc2.prepare (spec);
+    osc1.prepare (sampleRate);
+    osc2.prepare (sampleRate);
     filter.prepare (spec);
     filter.setType (juce::dsp::StateVariableTPTFilterType::lowpass);
     ampEnvelope.setSampleRate (sampleRate);
@@ -32,8 +30,15 @@ void SynthVoice::startNote (int midiNoteNumber, float velocity, juce::Synthesise
 {
     baseFrequency = static_cast<float> (juce::MidiMessage::getMidiNoteInHertz (midiNoteNumber));
     noteVelocity = velocity;
+
+    // Deterministic reset keeps transients clean and phase coherent between voices.
+    osc1.reset (0.0);
+    osc2.reset (0.25);
+
+    updateOscillatorWaveforms();
     updateEnvelope();
     updateFrequencies();
+    filter.reset();
     ampEnvelope.noteOn();
 }
 
@@ -59,30 +64,8 @@ void SynthVoice::updateEnvelope()
 
 void SynthVoice::updateOscillatorWaveforms()
 {
-    const int wave1 = static_cast<int> (apvts.getRawParameterValue ("osc1Wave")->load());
-    const int wave2 = static_cast<int> (apvts.getRawParameterValue ("osc2Wave")->load());
-
-    auto makeFn = [] (int waveform)
-    {
-        return [waveform] (float phase)
-        {
-            switch (waveform)
-            {
-                case 1:
-                    return juce::jmap (phase, -juce::MathConstants<float>::pi,
-                                      juce::MathConstants<float>::pi, -1.0f, 1.0f);
-                case 2:
-                    return phase < 0.0f ? -1.0f : 1.0f;
-                case 3:
-                    return (2.0f / juce::MathConstants<float>::pi) * std::asin (std::sin (phase));
-                default:
-                    return std::sin (phase);
-            }
-        };
-    };
-
-    osc1.initialise (makeFn (wave1));
-    osc2.initialise (makeFn (wave2));
+    osc1.setWaveform (static_cast<int> (apvts.getRawParameterValue ("osc1Wave")->load()));
+    osc2.setWaveform (static_cast<int> (apvts.getRawParameterValue ("osc2Wave")->load()));
 }
 
 void SynthVoice::updateFrequencies()
@@ -97,8 +80,8 @@ void SynthVoice::updateFrequencies()
         return std::pow (2.0f, oct + cents / 1200.0f);
     };
 
-    osc1.setFrequency (baseFrequency * pitchRatio (octave1, detune1), true);
-    osc2.setFrequency (baseFrequency * pitchRatio (octave2, detune2), true);
+    osc1.setFrequency (baseFrequency * pitchRatio (octave1, detune1));
+    osc2.setFrequency (baseFrequency * pitchRatio (octave2, detune2));
 }
 
 void SynthVoice::renderNextBlock (juce::AudioBuffer<float>& outputBuffer, int startSample, int numSamples)
@@ -114,16 +97,21 @@ void SynthVoice::renderNextBlock (juce::AudioBuffer<float>& outputBuffer, int st
     const float cutoff = apvts.getRawParameterValue ("cutoff")->load();
     const float resonance = apvts.getRawParameterValue ("resonance")->load();
 
-    filter.setCutoffFrequency (cutoff);
+    filter.setCutoffFrequency (juce::jlimit (20.0f, static_cast<float> (currentSampleRate * 0.45), cutoff));
     filter.setResonance (resonance);
+
+    // Equal-power blend avoids the level dip of a linear crossfade around 50/50.
+    const float gainA = std::cos (mix * juce::MathConstants<float>::halfPi);
+    const float gainB = std::sin (mix * juce::MathConstants<float>::halfPi);
 
     for (int sample = 0; sample < numSamples; ++sample)
     {
-        const float one = osc1.processSample (0.0f);
-        const float two = osc2.processSample (0.0f);
-        float value = one * (1.0f - mix) + two * mix;
+        const float one = osc1.process();
+        const float two = osc2.process();
+        float value = (one * gainA + two * gainB) * 0.72f;
+
         value = filter.processSample (0, value);
-        value *= ampEnvelope.getNextSample() * noteVelocity * 0.35f;
+        value *= ampEnvelope.getNextSample() * noteVelocity * 0.32f;
 
         for (int channel = 0; channel < outputBuffer.getNumChannels(); ++channel)
             outputBuffer.addSample (channel, startSample + sample, value);
