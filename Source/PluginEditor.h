@@ -31,17 +31,22 @@ private:
     juce::Slider osc1Oct, osc1Detune, osc2Oct, osc2Detune, mix;
     juce::Slider attack, decay, sustain, release;
     juce::Slider cutoff, resonance, gain;
+    juce::Slider reverbMix, reverbSize, reverbDamping, reverbWidth;
+    juce::ToggleButton reverbBypass;
 
     juce::Label titleLabel, subtitleLabel;
-    juce::Label osc1Label, osc2Label, blendLabel, envLabel, filterLabel;
+    juce::Label osc1Label, osc2Label, blendLabel, envLabel, filterLabel, reverbLabel;
 
     using SliderAttachment = juce::AudioProcessorValueTreeState::SliderAttachment;
     using ComboAttachment = juce::AudioProcessorValueTreeState::ComboBoxAttachment;
+    using ButtonAttachment = juce::AudioProcessorValueTreeState::ButtonAttachment;
 
     std::unique_ptr<ComboAttachment> osc1WaveA, osc2WaveA;
     std::unique_ptr<SliderAttachment> osc1OctA, osc1DetuneA, osc2OctA, osc2DetuneA, mixA;
     std::unique_ptr<SliderAttachment> attackA, decayA, sustainA, releaseA;
     std::unique_ptr<SliderAttachment> cutoffA, resonanceA, gainA;
+    std::unique_ptr<SliderAttachment> reverbMixA, reverbSizeA, reverbDampingA, reverbWidthA;
+    std::unique_ptr<ButtonAttachment> reverbBypassA;
 
     void setupKnob (juce::Slider&, const juce::String& suffix = {});
     void setupSectionLabel (juce::Label&, const juce::String& text);
