@@ -46,23 +46,18 @@ void SonovaLookAndFeel::drawRotarySlider (juce::Graphics& g, int x, int y, int w
     g.drawEllipse (dial.expanded (1.0f), 1.0f);
 
     juce::Path track;
-    track.addCentredArc (cx, cy, arcRadius, arcRadius, 0.0f,
-                         rotaryStartAngle, rotaryEndAngle, true);
+    track.addCentredArc (cx, cy, arcRadius, arcRadius, 0.0f, rotaryStartAngle, rotaryEndAngle, true);
     g.setColour (juce::Colour (0xff2d3540));
-    g.strokePath (track, juce::PathStrokeType (arcWidth,
-                                               juce::PathStrokeType::curved,
+    g.strokePath (track, juce::PathStrokeType (arcWidth, juce::PathStrokeType::curved,
                                                juce::PathStrokeType::rounded));
 
     juce::Path active;
-    active.addCentredArc (cx, cy, arcRadius, arcRadius, 0.0f,
-                          rotaryStartAngle, angle, true);
+    active.addCentredArc (cx, cy, arcRadius, arcRadius, 0.0f, rotaryStartAngle, angle, true);
     g.setColour (SonovaColours::accent.withAlpha (0.18f));
-    g.strokePath (active, juce::PathStrokeType (arcWidth + 3.0f,
-                                                juce::PathStrokeType::curved,
+    g.strokePath (active, juce::PathStrokeType (arcWidth + 3.0f, juce::PathStrokeType::curved,
                                                 juce::PathStrokeType::rounded));
     g.setColour (SonovaColours::accent);
-    g.strokePath (active, juce::PathStrokeType (arcWidth,
-                                                juce::PathStrokeType::curved,
+    g.strokePath (active, juce::PathStrokeType (arcWidth, juce::PathStrokeType::curved,
                                                 juce::PathStrokeType::rounded));
 
     auto body = dial.reduced (arcWidth + size * 0.06f);
@@ -127,8 +122,8 @@ SonovaAudioProcessorEditor::SonovaAudioProcessorEditor (SonovaAudioProcessor& p)
 {
     setLookAndFeel (&sonovaLookAndFeel);
     setResizable (true, true);
-    setResizeLimits (760, 500, 1200, 800);
-    setSize (920, 590);
+    setResizeLimits (760, 690, 1200, 920);
+    setSize (920, 760);
 
     titleLabel.setText ("SONOVA", juce::dontSendNotification);
     titleLabel.setFont (juce::Font (juce::FontOptions (34.0f).withStyle ("Bold")));
@@ -136,7 +131,7 @@ SonovaAudioProcessorEditor::SonovaAudioProcessorEditor (SonovaAudioProcessor& p)
     titleLabel.setJustificationType (juce::Justification::centredLeft);
     addAndMakeVisible (titleLabel);
 
-    subtitleLabel.setText ("DUAL-OSC SYNTHESIZER  /  0.2", juce::dontSendNotification);
+    subtitleLabel.setText ("DUAL-OSC SYNTHESIZER  /  0.3", juce::dontSendNotification);
     subtitleLabel.setFont (juce::Font (juce::FontOptions (11.5f)));
     subtitleLabel.setColour (juce::Label::textColourId, SonovaColours::muted);
     subtitleLabel.setJustificationType (juce::Justification::centredRight);
@@ -161,12 +156,25 @@ SonovaAudioProcessorEditor::SonovaAudioProcessorEditor (SonovaAudioProcessor& p)
     setupKnob (cutoff, " Hz");
     setupKnob (resonance);
     setupKnob (gain, " dB");
+    setupKnob (reverbMix, "%");
+    setupKnob (reverbSize, "%");
+    setupKnob (reverbDamping, "%");
+    setupKnob (reverbWidth, "%");
+
+    for (auto* slider : { &reverbMix, &reverbSize, &reverbDamping, &reverbWidth })
+        slider->setNumDecimalPlacesToDisplay (2);
+
+    reverbBypass.setButtonText ("BYPASS");
+    reverbBypass.setColour (juce::ToggleButton::textColourId, SonovaColours::muted);
+    reverbBypass.setColour (juce::ToggleButton::tickColourId, SonovaColours::accent);
+    addAndMakeVisible (reverbBypass);
 
     setupSectionLabel (osc1Label, "OSCILLATOR A");
     setupSectionLabel (osc2Label, "OSCILLATOR B");
     setupSectionLabel (blendLabel, "BLEND");
     setupSectionLabel (envLabel, "AMPLITUDE");
     setupSectionLabel (filterLabel, "FILTER / OUTPUT");
+    setupSectionLabel (reverbLabel, "SPACE / REVERB");
 
     auto& s = processor.apvts;
     osc1WaveA = std::make_unique<ComboAttachment> (s, "osc1Wave", osc1Wave);
@@ -183,6 +191,11 @@ SonovaAudioProcessorEditor::SonovaAudioProcessorEditor (SonovaAudioProcessor& p)
     cutoffA = std::make_unique<SliderAttachment> (s, "cutoff", cutoff);
     resonanceA = std::make_unique<SliderAttachment> (s, "resonance", resonance);
     gainA = std::make_unique<SliderAttachment> (s, "gain", gain);
+    reverbMixA = std::make_unique<SliderAttachment> (s, "reverbMix", reverbMix);
+    reverbSizeA = std::make_unique<SliderAttachment> (s, "reverbSize", reverbSize);
+    reverbDampingA = std::make_unique<SliderAttachment> (s, "reverbDamping", reverbDamping);
+    reverbWidthA = std::make_unique<SliderAttachment> (s, "reverbWidth", reverbWidth);
+    reverbBypassA = std::make_unique<ButtonAttachment> (s, "reverbBypass", reverbBypass);
 }
 
 SonovaAudioProcessorEditor::~SonovaAudioProcessorEditor()
@@ -256,7 +269,9 @@ void SonovaAudioProcessorEditor::paint (juce::Graphics& g)
     const float topY = 88.0f;
     const float upperH = 225.0f;
     const float lowerY = 329.0f;
-    const float lowerH = (float) getHeight() - lowerY - 24.0f;
+    const float lowerH = 200.0f;
+    const float reverbY = 543.0f;
+    const float reverbH = (float) getHeight() - reverbY - 24.0f;
 
     const float oscW = (contentW - gap * 2.0f) * 0.405f;
     const float blendW = contentW - oscW * 2.0f - gap * 2.0f;
@@ -268,11 +283,15 @@ void SonovaAudioProcessorEditor::paint (juce::Graphics& g)
     const float lowerLeftW = contentW * 0.55f;
     drawPanel (g, { margin, lowerY, lowerLeftW, lowerH });
     drawPanel (g, { margin + lowerLeftW + gap, lowerY, contentW - lowerLeftW - gap, lowerH });
+    drawPanel (g, { margin, reverbY, contentW, reverbH });
 
-    g.setColour (SonovaColours::accent.withAlpha (0.12f));
+    g.setColour (SonovaColours::accent.withAlpha (0.10f));
     g.fillEllipse ((float) getWidth() * 0.5f - 78.0f, topY + 41.0f, 156.0f, 156.0f);
-    g.setColour (SonovaColours::accent2.withAlpha (0.08f));
+    g.setColour (SonovaColours::accent2.withAlpha (0.07f));
     g.fillEllipse ((float) getWidth() * 0.5f - 55.0f, topY + 64.0f, 110.0f, 110.0f);
+
+    g.setColour (SonovaColours::accent2.withAlpha (0.08f));
+    g.fillRoundedRectangle ({ margin + 10.0f, reverbY + 38.0f, contentW - 20.0f, reverbH - 48.0f }, 12.0f);
 
     drawKnobLabel (g, "OCTAVE", osc1Oct);
     drawKnobLabel (g, "FINE", osc1Detune);
@@ -285,12 +304,15 @@ void SonovaAudioProcessorEditor::paint (juce::Graphics& g)
     drawKnobLabel (g, "CUTOFF", cutoff);
     drawKnobLabel (g, "RESO", resonance);
     drawKnobLabel (g, "OUTPUT", gain);
+    drawKnobLabel (g, "MIX", reverbMix);
+    drawKnobLabel (g, "SIZE", reverbSize);
+    drawKnobLabel (g, "DAMPING", reverbDamping);
+    drawKnobLabel (g, "WIDTH", reverbWidth);
 }
 
 void SonovaAudioProcessorEditor::resized()
 {
     const int w = getWidth();
-    const int h = getHeight();
     const int margin = 24;
     const int gap = 14;
     const int contentW = w - margin * 2;
@@ -322,7 +344,7 @@ void SonovaAudioProcessorEditor::resized()
     mix.setBounds (blendX + (blendW - mixSize) / 2, topY + 66, mixSize, 132);
 
     const int lowerY = 329;
-    const int lowerH = h - lowerY - 24;
+    const int lowerH = 200;
     const int lowerLeftW = juce::roundToInt (contentW * 0.55f);
     const int lowerRightX = margin + lowerLeftW + gap;
     const int lowerRightW = contentW - lowerLeftW - gap;
@@ -333,11 +355,21 @@ void SonovaAudioProcessorEditor::resized()
     juce::Slider* envSliders[] = { &attack, &decay, &sustain, &release };
     const int envKnobW = (lowerLeftW - 40) / 4;
     for (int i = 0; i < 4; ++i)
-        envSliders[i]->setBounds (margin + 12 + i * envKnobW, lowerY + 49,
-                                  envKnobW, juce::jmax (100, lowerH - 78));
+        envSliders[i]->setBounds (margin + 12 + i * envKnobW, lowerY + 49, envKnobW, lowerH - 76);
 
     const int filterKnobW = (lowerRightW - 34) / 3;
-    cutoff.setBounds (lowerRightX + 10, lowerY + 49, filterKnobW, juce::jmax (100, lowerH - 78));
-    resonance.setBounds (lowerRightX + 12 + filterKnobW, lowerY + 49, filterKnobW, juce::jmax (100, lowerH - 78));
-    gain.setBounds (lowerRightX + 14 + filterKnobW * 2, lowerY + 49, filterKnobW, juce::jmax (100, lowerH - 78));
+    cutoff.setBounds (lowerRightX + 10, lowerY + 49, filterKnobW, lowerH - 76);
+    resonance.setBounds (lowerRightX + 12 + filterKnobW, lowerY + 49, filterKnobW, lowerH - 76);
+    gain.setBounds (lowerRightX + 14 + filterKnobW * 2, lowerY + 49, filterKnobW, lowerH - 76);
+
+    const int reverbY = 543;
+    const int reverbH = getHeight() - reverbY - 24;
+    reverbLabel.setBounds (margin + 18, reverbY + 10, 180, 24);
+    reverbBypass.setBounds (w - margin - 102, reverbY + 10, 90, 24);
+
+    juce::Slider* reverbSliders[] = { &reverbMix, &reverbSize, &reverbDamping, &reverbWidth };
+    const int rvKnobW = (contentW - 44) / 4;
+    for (int i = 0; i < 4; ++i)
+        reverbSliders[i]->setBounds (margin + 12 + i * rvKnobW, reverbY + 42,
+                                     rvKnobW, juce::jmax (98, reverbH - 64));
 }
