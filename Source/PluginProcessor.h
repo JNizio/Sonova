@@ -20,7 +20,7 @@ public:
     bool acceptsMidi() const override { return true; }
     bool producesMidi() const override { return false; }
     bool isMidiEffect() const override { return false; }
-    double getTailLengthSeconds() const override { return 8.0; }
+    double getTailLengthSeconds() const override { return 12.0; }
 
     int getNumPrograms() override { return 1; }
     int getCurrentProgram() override { return 0; }
@@ -36,7 +36,10 @@ public:
 
 private:
     juce::Synthesiser synth;
+    juce::Reverb reverb;
     juce::SmoothedValue<float, juce::ValueSmoothingTypes::Linear> masterGain;
+
+    void updateReverbParameters();
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (SonovaAudioProcessor)
 };
