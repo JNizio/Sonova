@@ -14,6 +14,10 @@ SonovaAudioProcessor::SonovaAudioProcessor()
 void SonovaAudioProcessor::prepareToPlay (double sampleRate, int samplesPerBlock)
 {
     synth.setCurrentPlaybackSampleRate (sampleRate);
+    reverb.setSampleRate (sampleRate);
+    reverb.reset();
+    updateReverbParameters();
+
     masterGain.reset (sampleRate, 0.02);
     masterGain.setCurrentAndTargetValue (
         juce::Decibels::decibelsToGain (apvts.getRawParameterValue ("gain")->load()));
@@ -29,11 +33,36 @@ bool SonovaAudioProcessor::isBusesLayoutSupported (const BusesLayout& layouts) c
     return set == juce::AudioChannelSet::mono() || set == juce::AudioChannelSet::stereo();
 }
 
+void SonovaAudioProcessor::updateReverbParameters()
+{
+    juce::Reverb::Parameters p;
+    p.roomSize = apvts.getRawParameterValue ("reverbSize")->load();
+    p.damping  = apvts.getRawParameterValue ("reverbDamping")->load();
+    p.width    = apvts.getRawParameterValue ("reverbWidth")->load();
+
+    const float mix = apvts.getRawParameterValue ("reverbMix")->load();
+    p.wetLevel = mix;
+    p.dryLevel = 1.0f - mix;
+    p.freezeMode = 0.0f;
+    reverb.setParameters (p);
+}
+
 void SonovaAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::MidiBuffer& midi)
 {
     juce::ScopedNoDenormals noDenormals;
     buffer.clear();
     synth.renderNextBlock (buffer, midi, 0, buffer.getNumSamples());
+
+    const bool reverbBypassed = apvts.getRawParameterValue ("reverbBypass")->load() > 0.5f;
+    if (! reverbBypassed)
+    {
+        updateReverbParameters();
+
+        if (buffer.getNumChannels() >= 2)
+            reverb.processStereo (buffer.getWritePointer (0), buffer.getWritePointer (1), buffer.getNumSamples());
+        else if (buffer.getNumChannels() == 1)
+            reverb.processMono (buffer.getWritePointer (0), buffer.getNumSamples());
+    }
 
     masterGain.setTargetValue (
         juce::Decibels::decibelsToGain (apvts.getRawParameterValue ("gain")->load()));
@@ -67,6 +96,7 @@ void SonovaAudioProcessor::setStateInformation (const void* data, int sizeInByte
 juce::AudioProcessorValueTreeState::ParameterLayout SonovaAudioProcessor::createParameterLayout()
 {
     using APF = juce::AudioParameterFloat;
+    using APB = juce::AudioParameterBool;
     using APC = juce::AudioParameterChoice;
     using PID = juce::ParameterID;
 
@@ -101,6 +131,17 @@ juce::AudioProcessorValueTreeState::ParameterLayout SonovaAudioProcessor::create
                                              juce::NormalisableRange<float> (40.0f, 20000.0f, 1.0f, 0.22f), 12000.0f));
     params.push_back (std::make_unique<APF> (PID { "resonance", 1 }, "Resonance",
                                              juce::NormalisableRange<float> (0.1f, 1.2f, 0.001f), 0.2f));
+
+    params.push_back (std::make_unique<APB> (PID { "reverbBypass", 1 }, "Reverb Bypass", false));
+    params.push_back (std::make_unique<APF> (PID { "reverbMix", 1 }, "Reverb Mix",
+                                             juce::NormalisableRange<float> (0.0f, 1.0f, 0.001f), 0.18f));
+    params.push_back (std::make_unique<APF> (PID { "reverbSize", 1 }, "Reverb Size",
+                                             juce::NormalisableRange<float> (0.0f, 1.0f, 0.001f), 0.55f));
+    params.push_back (std::make_unique<APF> (PID { "reverbDamping", 1 }, "Reverb Damping",
+                                             juce::NormalisableRange<float> (0.0f, 1.0f, 0.001f), 0.45f));
+    params.push_back (std::make_unique<APF> (PID { "reverbWidth", 1 }, "Reverb Width",
+                                             juce::NormalisableRange<float> (0.0f, 1.0f, 0.001f), 0.8f));
+
     params.push_back (std::make_unique<APF> (PID { "gain", 1 }, "Output",
                                              juce::NormalisableRange<float> (-24.0f, 6.0f, 0.1f), -3.0f));
 
